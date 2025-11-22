@@ -1,0 +1,46 @@
+{
+  "version": 2,
+  "name": "hotel-management-system",
+  "functions": {
+    "app/api/admin/**": {
+      "maxDuration": 30
+    },
+    "app/api/auth/**": {
+      "maxDuration": 30
+    },
+    "app/api/payments/**": {
+      "maxDuration": 60
+    }
+  },
+  "rewrites": [
+    {
+      "source": "/api/(.*)",
+      "destination": "/api/$1"
+    }
+  ],
+  "headers": [
+    {
+      "source": "/api/(.*)",
+      "headers": [
+        {
+          "key": "Access-Control-Allow-Origin",
+          "value": "$ALLOWED_ORIGINS"
+        },
+        {
+          "key": "Access-Control-Allow-Methods",
+          "value": "GET, POST, PUT, DELETE, PATCH, OPTIONS"
+        },
+        {
+          "key": "Access-Control-Allow-Headers",
+          "value": "Content-Type, Authorization"
+        }
+      ]
+    }
+  ],
+  "redirects": [
+    {
+      "source": "/docs",
+      "destination": "/api-docs"
+    }
+  ]
+}

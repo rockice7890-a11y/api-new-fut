@@ -1,0 +1,3008 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+enum UserRole {
+  GUEST
+  USER
+  HOTEL_MANAGER
+  RECEPTIONIST
+  ACCOUNTANT
+  ADMIN
+}
+
+enum BookingStatus {
+  PENDING
+  CONFIRMED
+  CANCELLED
+  COMPLETED
+  CHECKED_IN
+  CHECKED_OUT
+}
+
+enum RoomStatus {
+  AVAILABLE
+  OCCUPIED
+  MAINTENANCE
+  RESERVED
+}
+
+enum NotificationType {
+  BOOKING_CONFIRMED
+  BOOKING_CANCELLED
+  REVIEW_RECEIVED
+  SPECIAL_OFFER
+  PAYMENT_REMINDER
+  CHECK_IN_REMINDER
+  SYSTEM_ALERT
+}
+
+enum DiscountType {
+  PERCENTAGE
+  FIXED_AMOUNT
+  EARLY_BIRD
+  LOYALTY
+  SEASONAL
+}
+
+enum BlockReasonType {
+  FRAUD
+  ABUSE
+  NON_PAYMENT
+  VIOLATION
+  POLICY_BREACH
+}
+
+enum InvoiceStatus {
+  DRAFT
+  ISSUED
+  PAID
+  OVERDUE
+  CANCELLED
+}
+
+enum PayrollStatus {
+  PENDING
+  PROCESSED
+  PAID
+  FAILED
+}
+
+enum StaffNotificationType {
+  URGENT
+  BOOKING_ALERT
+  MAINTENANCE
+  STAFF_MEETING
+  SHIFT_UPDATE
+  GENERAL
+}
+
+// Advanced Permission System
+enum PermissionType {
+  // System Management
+  SYSTEM_CONFIGURATION
+  SYSTEM_MONITORING
+  SYSTEM_BACKUP
+  SYSTEM_RESTORE
+
+  // User Management
+  USER_CREATE
+  USER_READ
+  USER_UPDATE
+  USER_DELETE
+  USER_BLOCK
+  USER_UNBLOCK
+
+  // Hotel Management
+  HOTEL_CREATE
+  HOTEL_READ
+  HOTEL_UPDATE
+  HOTEL_DELETE
+  HOTEL_MANAGE_STAFF
+  HOTEL_FINANCIAL_REPORTS
+  HOTEL_ACCESS
+
+  // Booking Management
+  BOOKING_CREATE
+  BOOKING_READ
+  BOOKING_UPDATE
+  BOOKING_DELETE
+  BOOKING_CANCEL
+  BOOKING_REFUND
+
+  // Financial Management
+  FINANCIAL_VIEW
+  FINANCIAL_UPDATE
+  PAYMENT_PROCESS
+  INVOICE_GENERATE
+  DISCOUNT_MANAGE
+  PRICING_CONTROL
+
+  // Security & Compliance
+  SECURITY_AUDIT
+  COMPLIANCE_MONITORING
+  DATA_EXPORT
+  DATA_DELETE
+  ACCESS_LOG_VIEW
+
+  // Admin Specific
+  ADMIN_PANEL_ACCESS
+  ROLE_MANAGEMENT
+  PERMISSION_MANAGEMENT
+  SYSTEM_LOGS_VIEW
+  GLOBAL_SETTINGS
+}
+
+enum PermissionScope {
+  GLOBAL // Can perform action across all hotels
+  HOTEL // Can perform action in assigned hotels only
+  PERSONAL // Can only perform actions on own data
+  DEPARTMENT // Can perform actions in specific department
+}
+
+enum AdminLevel {
+  SUPER_ADMIN // Full system access
+  SYSTEM_ADMIN // System configuration
+  HOTEL_ADMIN // Hotel management
+  DEPARTMENT_HEAD // Department management
+  SUPERVISOR // Basic supervisory role
+}
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  password  String
+  firstName String
+  lastName  String
+  phone     String?
+  avatar    String?
+  bio       String?
+  role      UserRole @default(USER)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  bookings                   Booking[]
+  reviews                    Review[]
+  hotels                     Hotel[]
+  wishlist                   Wishlist[]
+  notifications              Notification[]
+  messages                   Message[]
+  preferences                UserPreference?
+  loyaltyPoints              LoyaltyPoint?
+  blockInfo                  UserBlock?
+  invoices                   Invoice[]
+  payroll                    Payroll[]
+  sentStaffNotifications     StaffNotification[] @relation("staff_notif_sender")
+  receivedStaffNotifications StaffNotification[] @relation("staff_notif_recipient")
+  checkoutReminders          CheckoutReminder[]
+  userProfile                UserProfile? // Add user profile
+  guestDetails               GuestDetails[] // Guest info for bookings
+
+  // Advanced Permission System
+  adminLevel         AdminLevel? // Admin role level
+  permissions        UserPermission[]
+  auditLogs          AuditLog[] // Actions performed by this user
+  sessionLogs        SessionLog[] // Login session tracking
+  createdPermissions UserPermission[] @relation("permission_created_by")
+  createdRoles       RolePermission[] @relation("role_created_by")
+
+  // Contest and Gaming Relations
+  contestParticipants ContestParticipant[]
+  contestWinners      ContestWinner[]
+  gameSessions        GameSession[]
+
+  // Personal Data Relations
+  recommendations       Recommendation[]
+  smartAlerts           SmartAlert[]
+  enhancedNotifications EnhancedNotification[]
+  qrCodes               QRCode[]
+  biometricAuth         BiometricAuth[]
+  loyaltyTransactions   LoyaltyTransaction[]
+
+  // Employee and Session Relations
+  employeePermissions EmployeePermission[]
+  userSessions        UserSession[]
+  userActivities      UserActivity[]
+  pushNotifications   PushNotification[]
+  userDevices         UserDevice[]
+  promotionUsages     PromotionUsage[]
+  operationLogs       OperationLog[] // سجلات العمليات التي قام بها المستخدم
+}
+
+model UserPreference {
+  id     String @id @default(cuid())
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  emailNotifications Boolean @default(true)
+  smsNotifications   Boolean @default(false)
+  marketingEmails    Boolean @default(true)
+  preferredCurrency  String  @default("USD")
+  language           String  @default("en")
+
+  updatedAt DateTime @updatedAt
+}
+
+model LoyaltyPoint {
+  id     String @id @default(cuid())
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  points        Int    @default(0)
+  tier          String @default("BRONZE") // BRONZE, SILVER, GOLD, PLATINUM
+  totalEarned   Int    @default(0)
+  totalRedeemed Int    @default(0)
+
+  updatedAt DateTime @updatedAt
+}
+
+model Hotel {
+  id          String  @id @default(cuid())
+  name        String
+  description String?
+  address     String
+  city        String
+  state       String?
+  country     String
+  latitude    Float?
+  longitude   Float?
+  phone       String?
+  email       String?
+
+  managerId String
+  manager   User   @relation(fields: [managerId], references: [id])
+
+  rating       Float   @default(0)
+  totalReviews Int     @default(0)
+  checkInTime  String  @default("15:00")
+  checkOutTime String  @default("11:00")
+  isActive     Boolean @default(true)
+
+  amenities String[] // JSON array
+  images    String[] // Image URLs
+  policies  String? // JSON policies
+
+  rooms              Room[]
+  bookings           Booking[]
+  reviews            Review[]
+  wishlists          Wishlist[]
+  discounts          Discount[]
+  messages           Message[]
+  invoices           Invoice[]
+  payroll            Payroll[]
+  staffNotifications StaffNotification[]
+  checkoutReminders  CheckoutReminder[]
+  workingHours       HotelWorkingHours?
+  dailyReports       DailyBookingReport[]
+  monthlyReports     MonthlyBookingReport[]
+  promotionImages    PromotionImage[]       @relation("promotion_images") // Add promotion images
+  services           Service[]              @relation("hotel_services") // ربط الخدمات
+  organizations      Organization[]         @relation("organization_hotel") // ربط المنظمات
+  hotelSettings      HotelSettings? // Add hotel settings
+  autoCheckoutTasks  AutoCheckoutTask[]
+  pendingCheckouts   PendingCheckout[]
+  realtimeUpdates    RealtimeUpdate[]
+  invoiceTemplates   InvoiceTemplate[]
+  roomRelocations    RoomRelocation[]
+
+  createdAt             DateTime               @default(now())
+  updatedAt             DateTime               @updatedAt
+  financialTransactions FinancialTransaction[]
+  revenueStreams        RevenueStream[]
+  expenseCategories     ExpenseCategory[]
+  expenseRecords        ExpenseRecord[]
+  promotionCampaigns    PromotionCampaign[]
+  budgets               Budget[]
+  financialReports      FinancialReport[]
+  taxConfigurations     TaxConfiguration[]
+  taxRecords            TaxRecord[]
+  paymentIntegrations   PaymentIntegration[]
+
+  @@index([managerId])
+}
+
+model Room {
+  id      String @id @default(cuid())
+  hotelId String
+  hotel   Hotel  @relation(fields: [hotelId], references: [id], onDelete: Cascade)
+
+  roomType    String
+  roomNumber  String?
+  capacity    Int // عدد الأفراد
+  beds        Int // عدد الأسرة
+  basePrice   Float
+  status      RoomStatus @default(AVAILABLE)
+  description String?
+  amenities   String[]
+  images      String[] // صور الغرفة
+
+  inventory         RoomInventory[]
+  bookings          Booking[]
+  services          RoomService[]
+  fromRelocations   RoomRelocation[]   @relation("relocation_from_room")
+  toRelocations     RoomRelocation[]   @relation("relocation_to_room")
+  autoCheckoutTasks AutoCheckoutTask[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([hotelId, roomNumber])
+  @@index([hotelId])
+}
+
+model RoomInventory {
+  id     String @id @default(cuid())
+  roomId String
+  room   Room   @relation(fields: [roomId], references: [id], onDelete: Cascade)
+
+  date      DateTime
+  available Int
+  reserved  Int      @default(0)
+  price     Float
+
+  minStay Int @default(1)
+  maxStay Int @default(365)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([roomId, date])
+  @@index([roomId])
+  @@index([date])
+}
+
+model Booking {
+  id      String @id @default(cuid())
+  userId  String
+  user    User   @relation(fields: [userId], references: [id])
+  hotelId String
+  hotel   Hotel  @relation(fields: [hotelId], references: [id])
+  roomId  String
+  room    Room   @relation(fields: [roomId], references: [id])
+
+  bookingReference String   @unique
+  checkInDate      DateTime
+  checkOutDate     DateTime
+  guests           Int
+
+  guestName       String
+  guestEmail      String
+  guestPhone      String
+  specialRequests String?
+
+  basePrice  Float
+  taxes      Float         @default(0)
+  discount   Float         @default(0)
+  totalPrice Float
+  status     BookingStatus @default(PENDING)
+
+  payment           Payment?
+  messages          Message[]
+  invoices          Invoice[]
+  checkoutReminders CheckoutReminder[]
+  guestDetails      GuestDetails?
+  services          BookingService[]   @relation("booking_services") // ربط الخدمات
+  guestRatings      GuestRating[]
+  autoCheckoutTasks AutoCheckoutTask[]
+  pendingCheckouts  PendingCheckout[]
+  qrCodes           QRCode[] // رموز QR المرتبطة بالحجز
+
+  createdAt             DateTime               @default(now())
+  updatedAt             DateTime               @updatedAt
+  financialTransactions FinancialTransaction[]
+  expenseRecords        ExpenseRecord[]
+  promotionUsages       PromotionUsage[]
+
+  @@index([userId])
+  @@index([hotelId])
+  @@index([bookingReference])
+}
+
+model Payment {
+  id        String  @id @default(cuid())
+  bookingId String  @unique
+  booking   Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+
+  amount   Float
+  currency String @default("USD")
+  status   String @default("pending") // pending, completed, failed, refunded
+  method   String @default("card") // card, bank, wallet
+
+  stripeId      String?
+  transactionId String?
+
+  paidAt     DateTime?
+  refundedAt DateTime?
+
+  createdAt             DateTime               @default(now())
+  updatedAt             DateTime               @updatedAt
+  financialTransactions FinancialTransaction[]
+
+  @@index([bookingId])
+}
+
+model Review {
+  id      String @id @default(cuid())
+  userId  String
+  user    User   @relation(fields: [userId], references: [id])
+  hotelId String
+  hotel   Hotel  @relation(fields: [hotelId], references: [id], onDelete: Cascade)
+
+  rating  Int // 1-5
+  comment String
+
+  cleanliness Int?
+  comfort     Int?
+  service     Int?
+  value       Int?
+
+  verified Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@index([hotelId])
+}
+
+model Wishlist {
+  id      String @id @default(cuid())
+  userId  String
+  user    User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  hotelId String
+  hotel   Hotel  @relation(fields: [hotelId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@unique([userId, hotelId])
+  @@index([userId])
+}
+
+model Notification {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  type    NotificationType
+  title   String
+  message String
+  data    String? // JSON data
+  read    Boolean          @default(false)
+
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([read])
+}
+
+model Message {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  hotelId   String
+  hotel     Hotel    @relation(fields: [hotelId], references: [id], onDelete: Cascade)
+  bookingId String?
+  booking   Booking? @relation(fields: [bookingId], references: [id], onDelete: SetNull)
+
+  senderType  String // USER or HOTEL
+  message     String
+  attachments String[] // URLs
+
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([hotelId])
+  @@index([bookingId])
+}
+
+model Discount {
+  id      String @id @default(cuid())
+  hotelId String
+  hotel   Hotel  @relation(fields: [hotelId], references: [id], onDelete: Cascade)
+
+  code  String
+  type  DiscountType
+  value Float
+
+  description String?
+
+  minStay  Int?
+  maxStay  Int?
+  minPrice Float?
+  maxPrice Float?
+
+  validFrom  DateTime
+  validUntil DateTime
+
+  usageLimit Int?
+  used       Int  @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([hotelId, code])
+  @@index([hotelId])
+}
+
+model BookingHistory {
+  id        String @id @default(cuid())
+  bookingId String
+
+  oldStatus BookingStatus?
+  newStatus BookingStatus
+  reason    String?
+  changedBy String?
+
+  createdAt DateTime @default(now())
+}
+
+model UserBlock {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  isBlocked   Boolean         @default(true)
+  reason      BlockReasonType
+  description String?
+
+  blockedBy String // Admin user ID
+  blockedAt DateTime  @default(now())
+  unblockAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId])
+  @@index([userId])
+  @@index([isBlocked])
+}
+
+model Invoice {
+  id            String @id @default(cuid())
+  invoiceNumber String @unique
+
+  bookingId String?
+  booking   Booking? @relation(fields: [bookingId], references: [id], onDelete: SetNull)
+
+  hotelId String
+  hotel   Hotel  @relation(fields: [hotelId], references: [id], onDelete: Cascade)
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  subtotal    Float
+  tax         Float
+  discount    Float @default(0)
+  totalAmount Float
+
+  status    InvoiceStatus @default(DRAFT)
+  issueDate DateTime      @default(now())
+  dueDate   DateTime
+  paidDate  DateTime?
+
+  paymentMethod String? // card, bank_transfer, cash
+  notes         String?
+
+  createdAt             DateTime               @default(now())
+  updatedAt             DateTime               @updatedAt
+  financialTransactions FinancialTransaction[]
+
+  @@index([bookingId])
+  @@index([hotelId])
+  @@index([userId])
+  @@index([status])
+}
+
+model Payroll {
+  id            String @id @default(cuid())
+  payrollNumber String @unique
+
+  hotelId String
+  hotel   Hotel  @relation(fields: [hotelId], references: [id], onDelete: Cascade)
+
+  staffId String
+  staff   User   @relation(fields: [staffId], references: [id], onDelete: Cascade)
+
+  baseSalary Float
+  bonuses    Float @default(0)
+  deductions Float @default(0)
+  netSalary  Float
+
+  payPeriodStart DateTime
+  payPeriodEnd   DateTime
+
+  status   PayrollStatus @default(PENDING)
+  paidDate DateTime?
+
+  bankAccount String?
+  notes       String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([hotelId])
+  @@index([staffId])
+  @@index([status])
+}
+
+model StaffNotification {
+  id String @id @default(cuid())
+
+  hotelId String
+  hotel   Hotel  @relation(fields: [hotelId], references: [id], onDelete: Cascade)
+
+  senderId String // Manager/Admin user ID
+  sender   User   @relation("staff_notif_sender", fields: [senderId], references: [id], onDelete: Cascade)
+
+  recipientId String // Staff member receiving notification
+  recipient   User   @relation("staff_notif_recipient", fields: [recipientId], references: [id], onDelete: Cascade)
+
+  type     StaffNotificationType
+  subject  String
+  message  String
+  priority String                @default("NORMAL") // LOW, NORMAL, HIGH, URGENT
+
+  isRead Boolean   @default(false)
+  readAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([hotelId])
+  @@index([recipientId])
+  @@index([senderId])
+  @@index([isRead])
+}
+
+model CheckoutReminder {
+  id String @id @default(cuid())
+
+  bookingId String
+  booking   Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  hotelId String
+  hotel   Hotel  @relation(fields: [hotelId], references: [id], onDelete: Cascade)
+
+  reminderTime DateTime
+  reminderText String
+
+  sent   Boolean   @default(false)
+  sentAt DateTime?
+
+  createdAt DateTime @default(now())
+
+  @@index([bookingId])
+  @@index([userId])
+  @@index([sent])
+}
+
+model HotelWorkingHours {
+  id String @id @default(cuid())
+
+  hotelId String @unique
+  hotel   Hotel  @relation(fields: [hotelId], references: [id], onDelete: Cascade)
+
+  monday    String @default("08:00-23:00") // Format: HH:MM-HH:MM
+  tuesday   String @default("08:00-23:00")
+  wednesday String @default("08:00-23:00")
+  thursday  String @default("08:00-23:00")
+  friday    String @default("08:00-23:00")
+  saturday  String @default("08:00-23:00")
+  sunday    String @default("08:00-23:00")
+
+  holidays     String[] // Array of holiday dates in ISO format
+  specialHours String[] // Special working hours for specific dates
+
+  timezone String @default("UTC")
+
+  updatedAt DateTime @updatedAt
+
+  @@index([hotelId])
+}
+
+model DailyBookingReport {
+  id String @id @default(cuid())
+
+  hotelId String
+  hotel   Hotel  @relation(fields: [hotelId], references: [id], onDelete: Cascade)
+
+  date DateTime
+
+  totalBookings Int
+  checkedIn     Int
+  checkedOut    Int
+  pending       Int
+  cancelled     Int
+
+  revenue Float
+
+  createdAt DateTime @default(now())
+
+  @@unique([hotelId, date])
+  @@index([hotelId])
+  @@index([date])
+}
+
+model MonthlyBookingReport {
+  id String @id @default(cuid())
+
+  hotelId String
+  hotel   Hotel  @relation(fields: [hotelId], references: [id], onDelete: Cascade)
+
+  month Int // 1-12
+  year  Int // 2024, 2025, etc
+
+  totalBookings Int
+  totalRevenue  Float
+  occupancyRate Float
+  averageRating Float
+
+  createdAt DateTime @default(now())
+
+  @@unique([hotelId, month, year])
+  @@index([hotelId])
+}
+
+model PageBlock {
+  id       String @id @default(cuid())
+  pagePath String @unique // e.g., "/bookings", "/admin", "/payments"
+
+  isBlocked    Boolean @default(false)
+  blockMessage String?
+  blockReason  String? // MAINTENANCE, SYSTEM_DOWN, UPGRADE, CUSTOM
+
+  blockedBy String // Admin user ID
+  blockedAt DateTime  @default(now())
+  unblockAt DateTime?
+
+  allowedRoles UserRole[] @default([]) // Empty means blocked for all except ADMIN
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([isBlocked])
+  @@index([blockReason])
+}
+
+model FeatureToggle {
+  id          String @id @default(cuid())
+  featureName String @unique // e.g., "booking_system", "payment_module"
+
+  isEnabled   Boolean @default(true)
+  description String?
+
+  enabledRoles UserRole[] @default([]) // Empty means enabled for all roles
+
+  toggledBy String // Admin user ID
+
+  toggledAt DateTime @default(now())
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([isEnabled])
+}
+
+model ButtonPermission {
+  id         String @id @default(cuid())
+  buttonName String @unique // e.g., "delete_booking", "edit_hotel", "refund_payment"
+
+  isHidden   Boolean @default(false)
+  isDisabled Boolean @default(false)
+
+  disabledMessage String? // Message shown when button is disabled
+
+  allowedRoles UserRole[] @default([]) // If empty, accessible to all
+
+  permissionLevel Int @default(0) // 0: visible, 1: disabled, 2: hidden
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([isDisabled])
+  @@index([isHidden])
+}
+
+model SystemMaintenance {
+  id          String @id @default(cuid())
+  title       String
+  description String
+
+  startTime DateTime
+  endTime   DateTime
+
+  severity String @default("LOW") // LOW, MEDIUM, HIGH, CRITICAL
+
+  affectedServices String[] // e.g., ["bookings", "payments"]
+
+  status String @default("SCHEDULED") // SCHEDULED, IN_PROGRESS, COMPLETED
+
+  createdBy String // Admin user ID
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status])
+  @@index([startTime])
+}
+
+model UserProfile {
+  id     String @id @default(cuid())
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  profileImage String? // Avatar image URL
+  coverImage   String? // Cover/banner image
+  bio          String?
+  company      String?
+  jobTitle     String?
+  location     String?
+  website      String?
+  socialLinks  String? // JSON with social media links
+
+  totalBookings Int      @default(0)
+  totalReviews  Int      @default(0)
+  memberSince   DateTime @default(now())
+
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+}
+
+model HotelManagerProfile {
+  id        String @id @default(cuid())
+  managerId String
+
+  profileImage   String?
+  bio            String?
+  experience     Int? // Years of experience
+  certifications String[] // List of certifications
+  phoneNumber    String?
+  email          String?
+
+  totalHotels   Int   @default(0)
+  averageRating Float @default(0)
+  totalGuests   Int   @default(0)
+
+  updatedAt DateTime @updatedAt
+}
+
+model GuestDetails {
+  id        String  @id @default(cuid())
+  bookingId String  @unique
+  booking   Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  organizationId String? // ربط النزيل بمنظمة إن وجدت
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+
+  fullName       String
+  nationalId     String? // الرقم القومي
+  passportNumber String? // رقم الجواز
+  phoneNumber    String
+  city           String
+  country        String
+
+  specialRequests  String?
+  emergencyContact String?
+  emergencyPhone   String?
+
+  checkInDate  DateTime
+  checkOutDate DateTime
+  guestCount   Int
+
+  verified   Boolean   @default(false)
+  verifiedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@index([bookingId])
+  @@index([organizationId])
+}
+
+model PromotionImage {
+  id      String @id @default(cuid())
+  hotelId String
+  hotel   Hotel  @relation("promotion_images", fields: [hotelId], references: [id], onDelete: Cascade)
+
+  imageUrl    String
+  title       String
+  description String?
+  altText     String? // For accessibility
+
+  displayOrder Int     @default(0)
+  isActive     Boolean @default(true)
+
+  startDate DateTime?
+  endDate   DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([hotelId])
+  @@index([isActive])
+}
+
+model Service {
+  id      String @id @default(cuid())
+  hotelId String
+  hotel   Hotel  @relation("hotel_services", fields: [hotelId], references: [id], onDelete: Cascade)
+
+  name        String // اسم الخدمة
+  description String?
+  price       Float
+  icon        String? // رابط الأيقونة
+  isActive    Boolean @default(true)
+
+  roomServices    RoomService[]
+  bookingServices BookingService[] // ربط الخدمات بالحجز
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([hotelId])
+}
+
+model RoomService {
+  id     String @id @default(cuid())
+  roomId String
+  room   Room   @relation(fields: [roomId], references: [id], onDelete: Cascade)
+
+  serviceId String
+  service   Service @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+
+  @@unique([roomId, serviceId])
+  @@index([roomId])
+  @@index([serviceId])
+}
+
+model BookingService {
+  id        String  @id @default(cuid())
+  bookingId String
+  booking   Booking @relation("booking_services", fields: [bookingId], references: [id], onDelete: Cascade)
+
+  serviceId String
+  service   Service @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+
+  quantity Int   @default(1)
+  price    Float // السعر عند وقت الحجز
+
+  @@unique([bookingId, serviceId])
+  @@index([bookingId])
+}
+
+model Organization {
+  id      String  @id @default(cuid())
+  hotelId String? // الفندق المسؤول عن المنظمة
+  hotel   Hotel?  @relation("organization_hotel", fields: [hotelId], references: [id], onDelete: SetNull)
+
+  name        String // اسم المنظمة
+  description String?
+  email       String?
+  phone       String?
+  address     String?
+  city        String?
+  country     String?
+
+  logo    String? // شعار المنظمة
+  website String?
+
+  contactPerson String?
+  taxId         String? // رقم الضريبة
+
+  isActive     Boolean        @default(true)
+  guestDetails GuestDetails[] // ربط النزلاء بالمنظمة
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([hotelId])
+}
+
+model HotelSettings {
+  id      String @id @default(cuid())
+  hotelId String @unique
+  hotel   Hotel  @relation(fields: [hotelId], references: [id], onDelete: Cascade)
+
+  // اليوم الفندق
+  checkInTime  String @default("13:00") // 1 PM
+  checkOutTime String @default("11:00") // 11 AM
+
+  // إعدادات المغادرة التلقائية
+  autoCheckoutEnabled Boolean @default(true)
+  autoCheckoutTime    String  @default("12:00") // بعد 1 ساعة من المغادرة
+  gracePeriodMinutes  Int     @default(60) // فترة سماح بالدقائق
+
+  // تحديثات فورية (Real-time)
+  realtimeUpdatesEnabled Boolean @default(true)
+
+  // إرسال الفواتير
+  autoSendInvoices Boolean @default(true)
+  invoiceSendTime  String? // e.g. "09:00"
+
+  // إعدادات أخرى
+  taxRate      Float  @default(0.15) // 15% ضريبة
+  serviceFee   Float  @default(0) // رسوم الخدمة
+  currencyCode String @default("USD")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([hotelId])
+}
+
+model AutoCheckoutTask {
+  id      String @id @default(cuid())
+  hotelId String
+  hotel   Hotel  @relation(fields: [hotelId], references: [id], onDelete: Cascade)
+
+  bookingId String
+  booking   Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+
+  roomId String
+  room   Room   @relation(fields: [roomId], references: [id], onDelete: Cascade)
+
+  scheduledTime DateTime // الوقت المجدول للمغادرة
+  processedAt   DateTime?
+
+  status String @default("PENDING") // PENDING, PROCESSING, COMPLETED, FAILED
+  reason String // سبب المغادرة
+
+  notes String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([hotelId])
+  @@index([bookingId])
+  @@index([status])
+  @@index([scheduledTime])
+}
+
+model PendingCheckout {
+  id      String @id @default(cuid())
+  hotelId String
+  hotel   Hotel  @relation(fields: [hotelId], references: [id], onDelete: Cascade)
+
+  bookingId String
+  booking   Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+
+  roomId String
+
+  autoCheckoutAt   DateTime // وقت المغادرة التلقائية
+  staffConfirmedAt DateTime? // وقت تأكيد الموظف
+  staffConfirmedBy String? // معرف الموظف
+
+  isConfirmed       Boolean @default(false)
+  confirmationNotes String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([hotelId])
+  @@index([bookingId])
+  @@index([autoCheckoutAt])
+}
+
+model RealtimeUpdate {
+  id      String @id @default(cuid())
+  hotelId String
+  hotel   Hotel  @relation(fields: [hotelId], references: [id], onDelete: Cascade)
+
+  eventType    String // BOOKING_CREATED, BOOKING_UPDATED, ROOM_STATUS_CHANGED, etc
+  resourceType String // BOOKING, ROOM, PAYMENT, etc
+  resourceId   String
+
+  data String // JSON data for the update
+
+  createdAt DateTime @default(now())
+
+  @@index([hotelId])
+  @@index([eventType])
+  @@index([createdAt])
+}
+
+model InvoiceTemplate {
+  id      String @id @default(cuid())
+  hotelId String
+  hotel   Hotel  @relation(fields: [hotelId], references: [id], onDelete: Cascade)
+
+  templateName String
+  subject      String // عنوان البريد
+  body         String // نص البريد (قد يحتوي على HTML)
+  footerText   String?
+
+  isDefault Boolean @default(false)
+  isActive  Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([hotelId])
+}
+
+model RoomRelocation {
+  id      String @id @default(cuid())
+  hotelId String
+  hotel   Hotel  @relation(fields: [hotelId], references: [id], onDelete: Cascade)
+
+  fromRoomId String
+  toRoom     Room   @relation("relocation_from_room", fields: [fromRoomId], references: [id], onDelete: Cascade)
+
+  toRoomId         String
+  toRoomRelocation Room   @relation("relocation_to_room", fields: [toRoomId], references: [id], onDelete: Cascade)
+
+  bookingId String
+  reason    String // e.g., "MAINTENANCE", "UPGRADE", "CUSTOMER_REQUEST"
+
+  relocatedAt DateTime
+  relocatedBy String // معرف الموظف
+
+  createdAt DateTime @default(now())
+
+  @@index([hotelId])
+  @@index([bookingId])
+}
+
+model GuestRating {
+  id        String  @id @default(cuid())
+  bookingId String
+  booking   Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+
+  cleanliness   Int? // 1-5
+  comfort       Int?
+  service       Int?
+  value         Int?
+  overallRating Int?
+
+  comment String?
+
+  ratedAt DateTime?
+
+  createdAt DateTime @default(now())
+
+  @@unique([bookingId])
+  @@index([bookingId])
+}
+
+// ========================================
+// ADVANCED PERMISSION SYSTEM MODELS
+// ========================================
+
+// Custom Role Definitions
+model Role {
+  id          String     @id @default(cuid())
+  name        String     @unique
+  description String?
+  level       AdminLevel @default(DEPARTMENT_HEAD)
+
+  // Default permissions for this role
+  rolePermissions RolePermission[]
+
+  // Metadata
+  createdBy String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([level])
+}
+
+// Individual User Permissions (Overriding Role Permissions)
+model UserPermission {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  permission PermissionType
+  scope      PermissionScope
+
+  // Hotel-specific permissions (when scope is HOTEL)
+  hotelId String?
+
+  // Department-specific permissions (when scope is DEPARTMENT)
+  department String?
+
+  // Whether this permission is granted (true) or denied (false)
+  granted Boolean @default(true)
+  
+  // Whether this permission is active
+  isActive Boolean @default(true)
+
+  // When permission expires (null = never expires)
+  expiresAt DateTime?
+
+  // Metadata
+  createdBy     String // User who created this permission
+  createdByUser User     @relation("permission_created_by", fields: [createdBy], references: [id])
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@unique([userId, permission, hotelId])
+  @@index([userId])
+  @@index([permission])
+  @@index([scope])
+}
+
+// Role-based Permissions
+model RolePermission {
+  id     String @id @default(cuid())
+  roleId String
+  role   Role   @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  permission PermissionType
+  scope      PermissionScope
+
+  // Hotel-specific permissions
+  hotelId String?
+
+  // Department-specific permissions
+  department String?
+
+  // Metadata
+  createdBy     String
+  createdByUser User     @relation("role_created_by", fields: [createdBy], references: [id])
+  createdAt     DateTime @default(now())
+
+  @@unique([roleId, permission, hotelId])
+  @@index([roleId])
+  @@index([permission])
+}
+
+// Security Audit Logs
+model AuditLog {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id])
+
+  action     String // CREATE, READ, UPDATE, DELETE, LOGIN, LOGOUT, etc.
+  resource   String // BOOKING, USER, HOTEL, etc.
+  resourceId String? // ID of the affected resource
+
+  // Request details
+  ipAddress String
+  userAgent String?
+  endpoint  String?
+  method    String? // GET, POST, PUT, DELETE
+
+  // Changes made
+  oldValues String? // JSON string of old values
+  newValues String? // JSON string of new values
+
+  // Result
+  success      Boolean @default(true)
+  errorMessage String?
+
+  timestamp DateTime @default(now())
+
+  @@index([userId])
+  @@index([action])
+  @@index([resource])
+  @@index([timestamp])
+}
+
+// User Session Tracking
+model SessionLog {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  sessionId String  @unique
+  ipAddress String
+  userAgent String?
+
+  loginAt        DateTime  @default(now())
+  lastActivityAt DateTime  @default(now())
+  logoutAt       DateTime?
+
+  // Session metadata
+  isActive     Boolean @default(true)
+  isSuspicious Boolean @default(false)
+
+  @@index([userId])
+  @@index([sessionId])
+  @@index([isActive])
+}
+
+// System Configuration (for global settings)
+model SystemConfig {
+  id    String @id @default(cuid())
+  key   String @unique
+  value String
+  type  String @default("string") // string, number, boolean, json
+
+  description String?
+  category    String? // SECURITY, FEATURES, INTEGRATIONS, etc.
+
+  // Whether this config can be modified by admins
+  isEditable Boolean @default(true)
+
+  // Who last updated this
+  updatedBy String?
+  updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now())
+
+  @@index([category])
+}
+
+// ===========================================
+// ADVANCED FEATURES - GAMES & CONTESTS
+// ===========================================
+
+enum ContestType {
+  QUIZ // مسابقات ثقافية
+  TRIVIA // أسئلة معلوماتية
+  PHOTO // مسابقات التصوير
+  REVIEW // مسابقات التقييم
+  LOYALTY // مكافآت الولاء
+  SEASONAL // مسابقات موسمية
+  DAILY // تحديات يومية
+  WEEKLY // تحديات أسبوعية
+  MONTHLY // تحديات شهرية
+}
+
+enum GameType {
+  WORD_PUZZLE // ألعاب الكلمات
+  MEMORY // ألعاب الذاكرة
+  MATCHING // ألعاب المطابقة
+  QUIZ // ألعاب الاختبار
+  WORD_SEARCH // البحث عن الكلمات
+  CROSSWORD // الكلمات المتقاطعة
+}
+
+enum RewardType {
+  POINTS // نقاط
+  DISCOUNT // خصم
+  FREE_STAY // إقامة مجانية
+  ROOM_UPGRADE // ترقية غرفة
+  SPA_SERVICE // خدمة سبا
+  RESTAURANT // وجبة مجانية
+  GIFT_CARD // بطاقة هدايا
+  CASH // نقدي
+}
+
+model Contest {
+  id          String      @id @default(cuid())
+  title       String
+  description String?
+  type        ContestType
+  rules       String?
+
+  // Prize information
+  rewardType        RewardType?
+  rewardValue       Float? // Amount or percentage
+  rewardDescription String?
+
+  // Timeline
+  startDate       DateTime
+  endDate         DateTime
+  isActive        Boolean  @default(true)
+  maxParticipants Int? // null = unlimited
+  minPointsToJoin Int? // minimum loyalty points required
+
+  // Metadata
+  imageUrl String?
+  terms    String?
+
+  // Relationships
+  participants ContestParticipant[]
+  winners      ContestWinner[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([type])
+  @@index([startDate, endDate])
+  @@index([isActive])
+}
+
+model ContestParticipant {
+  id          String    @id @default(cuid())
+  contestId   String
+  userId      String
+  score       Int       @default(0)
+  completed   Boolean   @default(false)
+  joinedAt    DateTime  @default(now())
+  completedAt DateTime?
+
+  // Relationships
+  contest Contest @relation(fields: [contestId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([contestId, userId])
+  @@index([score])
+}
+
+model ContestWinner {
+  id           String    @id @default(cuid())
+  contestId    String
+  userId       String
+  prizeAwarded Boolean   @default(false)
+  prizeClaimed Boolean   @default(false)
+  awardedAt    DateTime  @default(now())
+  claimedAt    DateTime?
+
+  // Relationships
+  contest Contest @relation(fields: [contestId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([contestId])
+  @@index([userId])
+}
+
+model Game {
+  id           String   @id @default(cuid())
+  title        String
+  description  String?
+  type         GameType
+  instructions String?
+
+  // Game settings
+  difficulty    String @default("easy") // easy, medium, hard
+  estimatedTime Int? // in minutes
+  maxScore      Int    @default(100)
+
+  // Content
+  content String? // JSON string for game content
+
+  // Reward system
+  rewards      Json? // JSON with reward structure
+  pointsPerWin Int   @default(10)
+
+  // Metadata
+  imageUrl String?
+  videoUrl String?
+  isActive Boolean @default(true)
+
+  // Relationships
+  gameSessions GameSession[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([type])
+  @@index([difficulty])
+  @@index([isActive])
+}
+
+model GameSession {
+  id          String    @id @default(cuid())
+  gameId      String
+  userId      String
+  score       Int       @default(0)
+  maxScore    Int
+  completed   Boolean   @default(false)
+  startedAt   DateTime  @default(now())
+  completedAt DateTime?
+
+  // Progress tracking
+  progress Json? // JSON with game progress
+  attempts Int   @default(0)
+
+  // Relationships
+  game Game @relation(fields: [gameId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([gameId])
+  @@index([score])
+}
+
+// ===========================================
+// SMART FEATURES - AI & AUTOMATION
+// ===========================================
+
+enum RecommendationType {
+  ROOM_UPGRADE // ترقية غرفة
+  SERVICE // خدمات
+  ACTIVITY // أنشطة
+  RESTAURANT // مطعم
+  SPA // سبا
+  LOCAL_TOUR // جولات محلية
+  LOYALTY_PROGRAM // برنامج ولاء
+}
+
+model Recommendation {
+  id          String             @id @default(cuid())
+  userId      String
+  type        RecommendationType
+  title       String
+  description String
+
+  // Recommendation data
+  data       Json? // JSON with recommendation details
+  confidence Float @default(0.5) // AI confidence score
+
+  // Status
+  isViewed   Boolean  @default(false)
+  isAccepted Boolean? // null = not decided yet
+  isClicked  Boolean  @default(false)
+
+  // AI metadata
+  algorithm String @default("collaborative_filtering")
+  factors   Json? // Factors that influenced recommendation
+
+  // Timing
+  createdAt  DateTime  @default(now())
+  viewedAt   DateTime?
+  acceptedAt DateTime?
+  expiresAt  DateTime?
+
+  // Relationships
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([type])
+  @@index([isViewed])
+  @@index([confidence])
+}
+
+model SmartAlert {
+  id       String @id @default(cuid())
+  userId   String
+  type     String // LOW_STAY_BALANCE, SPECIAL_OFFER, etc.
+  title    String
+  message  String
+  priority String @default("medium") // low, medium, high, urgent
+
+  // Alert data
+  data Json?
+
+  // Status
+  isRead        Boolean @default(false)
+  isActionTaken Boolean @default(false)
+
+  // Timing
+  createdAt DateTime  @default(now())
+  readAt    DateTime?
+  expiresAt DateTime?
+
+  // Relationships
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([isRead])
+  @@index([priority])
+}
+
+// ===========================================
+// ENHANCED NOTIFICATION SYSTEM
+// ===========================================
+
+enum NotificationPriority {
+  LOW
+  NORMAL
+  HIGH
+  URGENT
+}
+
+enum NotificationChannel {
+  PUSH // Push notification
+  EMAIL // Email notification
+  SMS // SMS notification
+  IN_APP // In-app notification
+}
+
+model EnhancedNotification {
+  id String @id @default(cuid())
+
+  // Basic info
+  title    String
+  message  String
+  type     NotificationType
+  priority NotificationPriority @default(NORMAL)
+
+  // Targeting
+  userId        String? // null = broadcast
+  targetRole    String? // target specific role
+  targetSegment String? // target user segment
+
+  // Channels
+  channels NotificationChannel[]
+
+  // Content
+  imageUrl   String?
+  actionUrl  String?
+  actionText String?
+
+  // Delivery
+  isScheduled  Boolean   @default(false)
+  scheduledFor DateTime?
+  expiresAt    DateTime?
+
+  // Status
+  isSent    Boolean @default(false)
+  isRead    Boolean @default(false)
+  isClicked Boolean @default(false)
+
+  // Tracking
+  deliveryCount Int @default(0)
+  clickCount    Int @default(0)
+
+  // Relationships
+  user User? @relation(fields: [userId], references: [id])
+
+  createdAt DateTime  @default(now())
+  sentAt    DateTime?
+  readAt    DateTime?
+
+  @@index([userId])
+  @@index([type])
+  @@index([priority])
+  @@index([isScheduled, scheduledFor])
+}
+
+// ===========================================
+// QR CODE SYSTEM
+// ===========================================
+
+enum QRCodeType {
+  ROOM_ACCESS // دخول الغرفة
+  CHECK_IN // تسجيل الوصول
+  CHECK_OUT // تسجيل المغادرة
+  RESTAURANT // طلب طعام
+  SPA_BOOKING // حجز سبا
+  SERVICE // طلب خدمة
+  DISCOUNT // خصم
+  GAME // لعبة
+  CONTEST // مسابقة
+  BOOKING_CONFIRMATION // تأكيد الحجز
+  INVOICE // فاتورة
+  PAYMENT_RECEIPT // إيصال دفع
+}
+
+model QRCode {
+  id        String     @id @default(cuid())
+  userId    String?
+  bookingId String? // ربط مع الحجز
+  type      QRCodeType
+  code      String     @unique
+
+  // Code data
+  data      Json? // JSON with specific data
+  expiresAt DateTime?
+
+  // Usage tracking
+  usedCount Int     @default(0)
+  maxUsage  Int? // null = unlimited
+  isActive  Boolean @default(true)
+
+  // Relationships
+  user    User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  booking Booking? @relation(fields: [bookingId], references: [id], onDelete: SetNull)
+  scans   QRCodeScan[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@index([bookingId])
+  @@index([type])
+  @@index([isActive])
+}
+
+model QRCodeScan {
+  id         String  @id @default(cuid())
+  qrCodeId   String
+  deviceInfo String? // device fingerprint
+  location   String? // where it was scanned
+
+  // Relationships
+  qrCode QRCode @relation(fields: [qrCodeId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@index([qrCodeId])
+}
+
+// ===========================================
+// BIOMETRIC AUTHENTICATION
+// ===========================================
+
+model BiometricAuth {
+  id     String @id @default(cuid())
+  userId String @unique
+
+  // Biometric data (encrypted)
+  fingerprintData String? // encrypted fingerprint template
+  faceData        String? // encrypted face template
+  voiceData       String? // encrypted voice template
+
+  // Settings
+  fingerprintEnabled Boolean @default(false)
+  faceEnabled        Boolean @default(false)
+  voiceEnabled       Boolean @default(false)
+
+  // Status
+  isVerified   Boolean   @default(false)
+  lastVerified DateTime?
+
+  // Backup auth
+  backupCode    String? // encrypted backup code
+  hasBackupAuth Boolean @default(false)
+
+  // Relationships
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+}
+
+// ===========================================
+// ENHANCED LOYALTY PROGRAM
+// ===========================================
+
+enum LoyaltyTier {
+  BRONZE // 0-999 points
+  SILVER // 1000-4999 points
+  GOLD // 5000-14999 points
+  PLATINUM // 15000+ points
+}
+
+enum LoyaltyAction {
+  BOOKING // booking made
+  REVIEW // review submitted
+  REFERRAL // referral bonus
+  BIRTHDAY // birthday bonus
+  ANNIVERSARY // anniversary bonus
+  STAY_MILESTONE // stay milestones
+  GAME_WIN // game win
+  CONTEST_WIN // contest win
+}
+
+model LoyaltyTransaction {
+  id     String        @id @default(cuid())
+  userId String
+  action LoyaltyAction
+  points Int
+
+  // Transaction details
+  description String
+  referenceId String? // booking ID, game ID, etc.
+  expiresAt   DateTime?
+
+  // Metadata
+  multiplier Float   @default(1.0)
+  source     String? // where points came from
+
+  // Relationships
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([action])
+  @@index([createdAt])
+}
+
+// ===========================================
+// EMPLOYEE ACCESS CONTROL
+// ===========================================
+
+enum AccessLevel {
+  NONE // لا صلاحية
+  VIEW // مشاهدة فقط
+  EDIT // تعديل
+  CREATE // إنشاء
+  DELETE // حذف
+  FULL // صلاحيات كاملة
+}
+
+enum Department {
+  RECEPTION // الاستقبال
+  HOUSEKEEPING // housekeeping
+  RESTAURANT // المطعم
+  SPA // السبا
+  MAINTENANCE // الصيانة
+  SECURITY // الأمن
+  MANAGEMENT // الإدارة
+  ACCOUNTING // المحاسبة
+  HR // الموارد البشرية
+  MARKETING // التسويق
+}
+
+model EmployeePermission {
+  id         String @id @default(cuid())
+  employeeId String
+
+  // Permission details
+  department  Department
+  permission  String // VIEW_BOOKINGS, EDIT_ROOMS, etc.
+  accessLevel AccessLevel
+  hotelId     String? // null = all hotels
+
+  // Scope
+  scope String // GLOBAL, HOTEL, DEPARTMENT, PERSONAL
+
+  // Duration
+  grantedAt DateTime  @default(now())
+  expiresAt DateTime?
+  isActive  Boolean   @default(true)
+
+  // Grantor info
+  grantedBy String // admin user ID
+
+  // Relationships
+  employee User @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([employeeId])
+  @@index([department])
+  @@index([hotelId])
+  @@index([isActive])
+}
+
+// ===========================================
+// USER SESSIONS & ACTIVITY TRACKING
+// ===========================================
+
+model UserSession {
+  id     String @id @default(cuid())
+  userId String
+
+  // Session data
+  deviceId   String
+  deviceType String // ios, android, web
+  deviceInfo String? // device specifications
+
+  // Authentication
+  authMethod String // password, biometric, social, etc.
+  ipAddress  String?
+  location   String?
+
+  // Status
+  isActive     Boolean  @default(true)
+  lastActivity DateTime @default(now())
+  expiresAt    DateTime
+
+  // Relationships
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([isActive])
+  @@index([deviceId])
+}
+
+model UserActivity {
+  id     String @id @default(cuid())
+  userId String
+
+  // Activity details
+  action     String // LOGIN, LOGOUT, BOOKING_CREATE, etc.
+  resource   String? // booking, room, user, etc.
+  resourceId String? // ID of the resource
+  details    Json? // Additional details
+
+  // Context
+  ipAddress String?
+  userAgent String?
+  location  String?
+
+  // Relationships
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([action])
+  @@index([createdAt])
+}
+
+// ===========================================
+// PUSH NOTIFICATIONS SYSTEM
+// ===========================================
+
+model PushNotification {
+  id     String @id @default(cuid())
+  userId String
+
+  // Notification content
+  title String
+  body  String
+  data  Json? // Additional data payload
+
+  // Targeting
+  type     NotificationType
+  priority NotificationPriority @default(NORMAL)
+
+  // Status
+  isRead Boolean   @default(false)
+  isSent Boolean   @default(false)
+  sentAt DateTime?
+  readAt DateTime?
+
+  // Scheduling
+  scheduledAt DateTime? // For future delivery
+  expiresAt   DateTime? // When notification expires
+
+  // Relationships
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@index([isSent])
+  @@index([isRead])
+  @@index([scheduledAt])
+  @@index([type])
+}
+
+model UserDevice {
+  id     String @id @default(cuid())
+  userId String
+
+  // Device identification
+  deviceId    String  @unique // Unique device identifier
+  deviceToken String? // FCM/APNS token
+  deviceType  String // ios, android, web
+  deviceName  String?
+  deviceModel String?
+
+  // App info
+  appVersion String?
+  osVersion  String?
+
+  // Status
+  isActive   Boolean  @default(true)
+  lastSeenAt DateTime @default(now())
+
+  // Push notification settings
+  notificationsEnabled Boolean @default(true)
+  soundEnabled         Boolean @default(true)
+  vibrationEnabled     Boolean @default(true)
+
+  // Relationships
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@index([deviceId])
+  @@index([isActive])
+}
+
+// ===========================================
+// ENHANCED ACCOUNTING & FINANCIAL SYSTEM
+// ===========================================
+
+// Financial Transaction Categories
+enum TransactionCategory {
+  REVENUE_ROOM // إيرادات الغرف
+  REVENUE_FNB // إيرادات الطعام والمشروبات
+  REVENUE_SPA // إيرادات السبا
+  REVENUE_EVENTS // إيرادات الفعاليات
+  REVENUE_OTHER // إيرادات أخرى
+
+  EXPENSE_STAFF // نفقات الموظفين
+  EXPENSE_UTILITIES // نفقات المرافق
+  EXPENSE_SUPPLIES // نفقات المؤن
+  EXPENSE_MAINTENANCE // نفقات الصيانة
+  EXPENSE_MARKETING // نفقات التسويق
+  EXPENSE_INSURANCE // نفقات التأمين
+  EXPENSE_OTHER // نفقات أخرى
+}
+
+// Payment Methods
+enum PaymentMethod {
+  CASH // نقد
+  CARD // بطاقة ائتمان
+  BANK_TRANSFER // تحويل بنكي
+  MOBILE_WALLET // محفظة رقمية
+  CHECK // شيك
+  CORPORATE_BILL // فاتورة مؤسسية
+  LOYALTY_POINTS // نقاط ولاء
+  PROMOTION_CREDIT // رصيد ترويجي
+}
+
+// Transaction Status
+enum TransactionStatus {
+  PENDING // معلق
+  COMPLETED // مكتمل
+  FAILED // فشل
+  CANCELLED // ملغي
+  REFUNDED // مُرَد
+  PARTIALLY_PAID // مدفوع جزئياً
+}
+
+// ===========================================
+// ADVANCED FINANCIAL TRANSACTION SYSTEM
+// ===========================================
+
+model FinancialTransaction {
+  id      String @id @default(cuid())
+  hotelId String
+  hotel   Hotel  @relation(fields: [hotelId], references: [id], onDelete: Cascade)
+
+  // Transaction Details
+  transactionNumber String              @unique
+  category          TransactionCategory
+  type              String              @default("INCOME") // INCOME, EXPENSE
+  amount            Float
+  currency          String              @default("USD")
+
+  // Related Records
+  bookingId String?
+  booking   Booking? @relation(fields: [bookingId], references: [id], onDelete: SetNull)
+
+  invoiceId String?
+  invoice   Invoice? @relation(fields: [invoiceId], references: [id], onDelete: SetNull)
+
+  paymentId String?
+  payment   Payment? @relation(fields: [paymentId], references: [id], onDelete: SetNull)
+
+  // Payment Information
+  paymentMethod    PaymentMethod
+  paymentReference String? // Reference from payment processor
+  transactionDate  DateTime      @default(now())
+
+  // Status and Tracking
+  status      TransactionStatus @default(COMPLETED)
+  description String
+  notes       String?
+
+  // Tax Information
+  taxAmount    Float   @default(0)
+  taxRate      Float   @default(0)
+  taxReference String? // Tax document reference
+
+  // Metadata
+  createdBy  String // User ID who created the transaction
+  approvedBy String? // User ID who approved
+  approvedAt DateTime?
+
+  // Accounting Period
+  fiscalYear   Int // e.g., 2024, 2025
+  fiscalPeriod String // e.g., "2024-Q1", "2024-01"
+
+  // Receipt/Document
+  receiptUrl  String? // URL to receipt/document
+  attachments String[] // Additional document URLs
+
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  revenueStream   RevenueStream?   @relation(fields: [revenueStreamId], references: [id])
+  revenueStreamId String?
+  expenseRecords  ExpenseRecord[]
+  promotionUsages PromotionUsage[]
+  taxRecords      TaxRecord[]
+
+  @@index([hotelId])
+  @@index([category])
+  @@index([status])
+  @@index([transactionDate])
+  @@index([fiscalYear])
+  @@index([fiscalPeriod])
+}
+
+// ===========================================
+// ENHANCED REVENUE MANAGEMENT
+// ===========================================
+
+model RevenueStream {
+  id      String @id @default(cuid())
+  hotelId String
+  hotel   Hotel  @relation(fields: [hotelId], references: [id], onDelete: Cascade)
+
+  // Stream Details
+  name        String // Room Revenue, F&B Revenue, etc.
+  category    TransactionCategory
+  description String?
+
+  // Financial Data
+  plannedRevenue Float @default(0) // المخطط له
+  actualRevenue  Float @default(0) // الفعلي
+  targetRevenue  Float @default(0) // الهدف
+
+  // Performance Metrics
+  varianceAmount  Float @default(0) // الانحراف المبلغ
+  variancePercent Float @default(0) // الانحراف بالنسبة المئوية
+
+  // Period
+  fiscalYear   Int
+  fiscalPeriod String
+
+  // Related Transactions
+  transactions FinancialTransaction[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([hotelId, category, fiscalYear, fiscalPeriod])
+  @@index([hotelId])
+  @@index([fiscalYear])
+}
+
+// ===========================================
+// EXPENSE MANAGEMENT
+// ===========================================
+
+model ExpenseCategory {
+  id      String  @id @default(cuid())
+  hotelId String?
+  hotel   Hotel?  @relation(fields: [hotelId], references: [id], onDelete: Cascade)
+
+  name         String // Utilities, Staff, Marketing, etc.
+  categoryType TransactionCategory
+  description  String?
+
+  // Budget Information
+  monthlyBudget  Float @default(0)
+  annualBudget   Float @default(0)
+  spentThisMonth Float @default(0)
+  spentThisYear  Float @default(0)
+
+  // Vendor Information
+  primaryVendor String?
+  vendorContact String?
+
+  // Tax Information
+  isDeductible Boolean @default(true)
+  taxCategory  String? // Business Expense, Operational, etc.
+
+  isActive Boolean @default(true)
+
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  expenseRecords ExpenseRecord[]
+
+  @@index([hotelId])
+  @@index([categoryType])
+}
+
+model Vendor {
+  id String @id @default(cuid())
+
+  // Vendor Information
+  name               String
+  companyName        String?
+  taxId              String? // Tax identification number
+  registrationNumber String?
+
+  // Contact Information
+  email   String?
+  phone   String?
+  website String?
+  address String?
+  city    String?
+  country String?
+
+  // Financial Information
+  paymentTerms String? // Net 30, Net 60, etc.
+  currency     String  @default("USD")
+  creditLimit  Float   @default(0)
+
+  // Banking Information (encrypted)
+  bankAccount String? // Encrypted
+  iban        String? // Encrypted
+  swiftCode   String? // Encrypted
+
+  // Rating and Performance
+  rating           Float? @default(0) // 1-5 stars
+  reliabilityScore Float? @default(0) // 0-100%
+
+  // Status
+  isActive   Boolean @default(true)
+  isVerified Boolean @default(false)
+
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  expenseRecords ExpenseRecord[]
+
+  @@index([name])
+  @@index([taxId])
+}
+
+model ExpenseRecord {
+  id      String @id @default(cuid())
+  hotelId String
+  hotel   Hotel  @relation(fields: [hotelId], references: [id], onDelete: Cascade)
+
+  // Expense Details
+  expenseNumber String          @unique
+  categoryId    String
+  category      ExpenseCategory @relation(fields: [categoryId], references: [id])
+
+  vendorId String?
+  vendor   Vendor? @relation(fields: [vendorId], references: [id], onDelete: SetNull)
+
+  // Financial Data
+  amount      Float
+  currency    String @default("USD")
+  taxAmount   Float  @default(0)
+  totalAmount Float
+
+  // Description
+  description String
+  notes       String?
+
+  // Date Information
+  expenseDate DateTime  @default(now())
+  dueDate     DateTime?
+  paidDate    DateTime?
+
+  // Payment Information
+  paymentMethod PaymentMethod
+  invoiceNumber String? // Vendor's invoice number
+  receiptNumber String? // Internal receipt number
+
+  // Approval Process
+  isApproved      Boolean   @default(false)
+  approvedBy      String? // User ID
+  approvedAt      DateTime?
+  rejectionReason String?
+
+  // Status
+  status TransactionStatus @default(PENDING)
+
+  // Documents
+  receiptUrl  String? // URL to receipt image
+  invoiceUrl  String? // URL to vendor invoice
+  attachments String[] // Additional documents
+
+  // Budget Impact
+  budgetPeriod   String? // e.g., "2024-01", "2024-Q1"
+  budgetCategory String? // Department or category
+
+  // Related Records
+  bookingId String?
+  booking   Booking? @relation(fields: [bookingId], references: [id], onDelete: SetNull)
+
+  // Related Transaction
+  transactionId String?
+  transaction   FinancialTransaction? @relation(fields: [transactionId], references: [id])
+
+  createdBy String // User ID who created
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([hotelId])
+  @@index([categoryId])
+  @@index([vendorId])
+  @@index([status])
+  @@index([expenseDate])
+  @@index([createdBy])
+}
+
+// ===========================================
+// ADVANCED PROMOTION & COUPON SYSTEM
+// ===========================================
+
+enum PromotionType {
+  DISCOUNT // خصم
+  BUY_GET_FREE // اشتري واحصل على مجاناً
+  PERCENTAGE_OFF // خصم بنسبة مئوية
+  FIXED_AMOUNT_OFF // خصم بمبلغ ثابت
+  FREE_NIGHT // ليلة مجانية
+  ROOM_UPGRADE // ترقية غرفة مجانية
+  FB_CREDIT // رصيد طعام ومشروبات
+  SPA_CREDIT // رصيد سبا
+  TRANSPORT // نقل مجاني
+  EARLY_CHECKIN // تسجيل وصول مبكر
+  LATE_CHECKOUT // تسجيل مغادرة متأخر
+  LOYALTY_MULTIPLIER // مضاعف نقاط الولاء
+}
+
+enum PromotionTarget {
+  ALL_USERS // جميع المستخدمين
+  NEW_USERS // مستخدمين جدد
+  LOYAL_CUSTOMERS // عملاء مميزين
+  CORPORATE // عملاء مؤسسيين
+  BIRTHDAY_USERS // مستخدمين في عيد ميلادهم
+  REFERRALS // المحالين
+  HIGH_VALUE // عملاء عالي القيمة
+  LOW_ACTIVITY // عملاء منخفضي النشاط
+  SPECIFIC_USER // مستخدم محدد
+  USER_SEGMENT // شريحة مستخدمين
+}
+
+enum PromotionStatus {
+  DRAFT // مسودة
+  SCHEDULED // مجدول
+  ACTIVE // نشط
+  PAUSED // متوقف مؤقتاً
+  EXPIRED // منتهي الصلاحية
+  CANCELLED // ملغي
+}
+
+model PromotionCampaign {
+  id      String  @id @default(cuid())
+  hotelId String?
+  hotel   Hotel?  @relation(fields: [hotelId], references: [id], onDelete: Cascade)
+
+  // Campaign Details
+  name        String
+  description String?
+  type        PromotionType
+  status      PromotionStatus @default(DRAFT)
+
+  // Targeting
+  target         PromotionTarget
+  targetCriteria Json? // JSON with targeting rules
+
+  // Pricing & Benefits
+  value           Float // Discount percentage, amount, etc.
+  maxDiscount     Float? // Maximum discount amount
+  minBookingValue Float? // Minimum booking value required
+  maxBookingValue Float? // Maximum booking value eligible
+
+  // Time Restrictions
+  validFrom  DateTime
+  validUntil DateTime
+
+  // Usage Limits
+  maxUses        Int? // Maximum total uses
+  maxUsesPerUser Int? // Maximum uses per user
+  maxUsesPerDay  Int? // Maximum uses per day
+  maxUsesPerWeek Int? // Maximum uses per week
+
+  // Current Usage
+  totalUsed Int @default(0)
+  todayUsed Int @default(0)
+  weekUsed  Int @default(0)
+
+  // Stacking Rules
+  canStackWithOther   Boolean  @default(false)
+  stackablePromotions String[] // IDs of stackable promotions
+
+  // Geographic & Stay Restrictions
+  eligibleCountries String[]
+  minNights         Int? // Minimum nights required
+  maxNights         Int? // Maximum nights allowed
+
+  // Budget Management
+  totalBudget Float? // Total campaign budget
+  spentBudget Float  @default(0) // Amount spent
+  costPerUse  Float  @default(0) // Average cost per promotion use
+
+  // Marketing
+  promoCode     String? // Unique promo code
+  affiliateCode String? // Affiliate code
+
+  // Media & Content
+  bannerImage     String?
+  termsConditions String?
+
+  // Analytics
+  viewCount      Int    @default(0)
+  clickCount     Int    @default(0)
+  conversionRate Float  @default(0)
+  roi            Float? // Return on investment
+
+  // Scheduling
+  scheduledStart DateTime?
+  scheduledEnd   DateTime?
+
+  // Approval
+  isApproved Boolean   @default(false)
+  approvedBy String?
+  approvedAt DateTime?
+
+  // Metadata
+  createdBy       String
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  lastUpdated     DateTime?        // Last time promotion was used
+  promotionUsages PromotionUsage[]
+
+  @@index([hotelId])
+  @@index([type])
+  @@index([status])
+  @@index([validFrom])
+  @@index([validUntil])
+  @@index([target])
+}
+
+model PromotionUsage {
+  id         String            @id @default(cuid())
+  campaignId String
+  campaign   PromotionCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  bookingId String?
+  booking   Booking? @relation(fields: [bookingId], references: [id], onDelete: SetNull)
+
+  // Usage Details
+  usedAt    DateTime @default(now())
+  promoCode String?
+
+  // Financial Impact
+  originalAmount Float // Original booking/service amount
+  discountAmount Float // Amount discounted
+  finalAmount    Float // Final amount after discount
+
+  // Transaction Reference
+  transactionId String?
+  transaction   FinancialTransaction? @relation(fields: [transactionId], references: [id])
+
+  // Context
+  deviceType String? // web, mobile, etc.
+  ipAddress  String?
+  userAgent  String?
+  referrer   String?
+
+  // Validation
+  isValid           Boolean @default(true)
+  validationMessage String?
+
+  @@index([campaignId])
+  @@index([userId])
+  @@index([bookingId])
+  @@index([usedAt])
+}
+
+// ===========================================
+// BUDGET MANAGEMENT
+// ===========================================
+
+model Budget {
+  id      String @id @default(cuid())
+  hotelId String
+  hotel   Hotel  @relation(fields: [hotelId], references: [id], onDelete: Cascade)
+
+  // Budget Period
+  fiscalYear   Int
+  fiscalPeriod String // MONTHLY, QUARTERLY, YEARLY
+
+  // Budget Categories
+  revenueTarget Float @default(0)
+  expenseBudget Float @default(0)
+  profitTarget  Float @default(0)
+
+  // Detailed Categories
+  roomRevenueBudget  Float @default(0)
+  fnbRevenueBudget   Float @default(0)
+  spaRevenueBudget   Float @default(0)
+  eventRevenueBudget Float @default(0)
+
+  staffExpenseBudget       Float @default(0)
+  utilitiesExpenseBudget   Float @default(0)
+  marketingExpenseBudget   Float @default(0)
+  maintenanceExpenseBudget Float @default(0)
+
+  // Actual Performance
+  actualRevenue  Float @default(0)
+  actualExpenses Float @default(0)
+  actualProfit   Float @default(0)
+
+  // Variances
+  revenueVariance Float @default(0)
+  expenseVariance Float @default(0)
+  profitVariance  Float @default(0)
+
+  // Status
+  status String @default("ACTIVE") // ACTIVE, COMPLETED, CANCELLED
+
+  // Approval
+  approvedBy String?
+  approvedAt DateTime?
+
+  // Notes
+  notes String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([hotelId, fiscalYear, fiscalPeriod])
+  @@index([hotelId])
+  @@index([fiscalYear])
+}
+
+// ===========================================
+// FINANCIAL REPORTS & ANALYTICS
+// ===========================================
+
+model FinancialReport {
+  id      String @id @default(cuid())
+  hotelId String
+  hotel   Hotel  @relation(fields: [hotelId], references: [id], onDelete: Cascade)
+
+  // Report Details
+  reportName   String
+  reportType   String // DAILY, WEEKLY, MONTHLY, QUARTERLY, YEARLY
+  reportPeriod String // e.g., "2024-11", "2024-Q4"
+
+  // Date Range
+  startDate DateTime
+  endDate   DateTime
+
+  // Revenue Summary
+  totalRevenue Float @default(0)
+  roomRevenue  Float @default(0)
+  fnbRevenue   Float @default(0)
+  spaRevenue   Float @default(0)
+  eventRevenue Float @default(0)
+  otherRevenue Float @default(0)
+
+  // Expense Summary
+  totalExpenses       Float @default(0)
+  staffExpenses       Float @default(0)
+  utilityExpenses     Float @default(0)
+  maintenanceExpenses Float @default(0)
+  marketingExpenses   Float @default(0)
+  otherExpenses       Float @default(0)
+
+  // Profit & Loss
+  grossProfit  Float @default(0)
+  netProfit    Float @default(0)
+  profitMargin Float @default(0)
+
+  // Key Metrics
+  occupancyRate Float? @default(0)
+  avgRoomRate   Float? @default(0)
+  revpar        Float? @default(0) // Revenue Per Available Room
+
+  // Comparative Data
+  previousPeriodRevenue  Float? @default(0)
+  previousPeriodExpenses Float? @default(0)
+  revenueGrowth          Float? @default(0)
+  expenseGrowth          Float? @default(0)
+
+  // Generated By
+  generatedBy String
+  generatedAt DateTime @default(now())
+
+  // Status
+  isFinal    Boolean   @default(false)
+  approvedBy String?
+  approvedAt DateTime?
+
+  @@index([hotelId])
+  @@index([reportPeriod])
+  @@index([startDate])
+  @@index([endDate])
+}
+
+// ===========================================
+// TAX MANAGEMENT
+// ===========================================
+
+model TaxConfiguration {
+  id      String  @id @default(cuid())
+  hotelId String?
+  hotel   Hotel?  @relation(fields: [hotelId], references: [id], onDelete: Cascade)
+
+  // Tax Details
+  taxName String // VAT, Sales Tax, Service Tax, etc.
+  taxCode String // Unique tax code
+  taxRate Float // Tax rate percentage
+
+  // Application Rules
+  appliesToRevenue  Boolean @default(true)
+  appliesToExpenses Boolean @default(false)
+  appliesToServices Boolean @default(true)
+  appliesToProducts Boolean @default(true)
+
+  // Tax Categories
+  applicableCategories TransactionCategory[]
+
+  // Exemptions
+  isExempt           Boolean  @default(false)
+  exemptionThreshold Float? // Amount below which tax doesn't apply
+  exemptUserTypes    String[] // User types exempt from tax
+
+  // Compliance
+  reportingFrequency String  @default("MONTHLY") // WEEKLY, MONTHLY, QUARTERLY, YEARLY
+  taxAuthority       String? // Government agency
+
+  // Effective Period
+  validFrom  DateTime
+  validUntil DateTime?
+
+  // Status
+  isActive Boolean @default(true)
+
+  createdAt  DateTime    @default(now())
+  updatedAt  DateTime    @updatedAt
+  taxRecords TaxRecord[]
+
+  @@index([hotelId])
+  @@index([taxCode])
+}
+
+model TaxRecord {
+  id      String @id @default(cuid())
+  hotelId String
+  hotel   Hotel  @relation(fields: [hotelId], references: [id], onDelete: Cascade)
+
+  // Tax Details
+  taxConfigId String
+  taxConfig   TaxConfiguration @relation(fields: [taxConfigId], references: [id])
+
+  // Transaction Reference
+  transactionId String?
+  transaction   FinancialTransaction? @relation(fields: [transactionId], references: [id])
+
+  // Tax Calculation
+  taxableAmount Float
+  taxAmount     Float
+  taxRate       Float
+  taxPeriod     String // e.g., "2024-11"
+
+  // Filing Information
+  isFiled         Boolean   @default(false)
+  filedAt         DateTime?
+  filedBy         String?
+  filingReference String? // Reference from tax authority
+
+  // Compliance
+  dueDate          DateTime?
+  paidDate         DateTime?
+  paymentReference String?
+
+  // Status
+  status String @default("PENDING") // PENDING, FILED, PAID, OVERDUE
+
+  // Notes
+  notes String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([hotelId])
+  @@index([taxConfigId])
+  @@index([taxPeriod])
+  @@index([status])
+}
+
+// ===========================================
+// INTEGRATION & WEBHOOKS
+// ===========================================
+
+model PaymentIntegration {
+  id      String @id @default(cuid())
+  hotelId String
+  hotel   Hotel  @relation(fields: [hotelId], references: [id], onDelete: Cascade)
+
+  // Integration Details
+  providerName    String // Stripe, PayPal, Square, etc.
+  integrationType String // PAYMENT, ACCOUNTING, INVOICING
+
+  // Configuration
+  isEnabled     Boolean @default(false)
+  configuration Json // API keys, settings (encrypted)
+
+  // Status
+  lastSyncAt     DateTime?
+  lastSyncStatus String? // SUCCESS, FAILED, PARTIAL
+
+  // Webhooks
+  webhookUrl    String?
+  webhookSecret String? // Encrypted
+  webhookEvents String[] // payment.succeeded, invoice.paid, etc.
+
+  // Metadata
+  createdBy   String
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  webhookLogs WebhookLog[]
+
+  @@index([hotelId])
+  @@index([providerName])
+}
+
+model WebhookLog {
+  id String @id @default(cuid())
+
+  // Webhook Details
+  integrationId String
+  integration   PaymentIntegration @relation(fields: [integrationId], references: [id], onDelete: Cascade)
+
+  // Event Information
+  eventType String
+  eventId   String? // Provider's event ID
+  payload   Json // Full webhook payload
+
+  // Processing Status
+  status       String    @default("PENDING") // PENDING, PROCESSED, FAILED
+  processedAt  DateTime?
+  errorMessage String?
+
+  // Retry Information
+  retryCount  Int       @default(0)
+  nextRetryAt DateTime?
+
+  createdAt DateTime @default(now())
+
+  @@index([integrationId])
+  @@index([status])
+  @@index([createdAt])
+}
+
+// ===========================================
+// OPERATIONAL MANAGEMENT SYSTEM
+// نظام إدارة العمليات
+// ===========================================
+
+enum OperationalStatus {
+  ACTIVE // نشط
+  SUSPENDED // معلق
+  MAINTENANCE // صيانة
+  EMERGENCY // طوارئ
+  ARCHIVED // مؤرشف
+  LOCKED // مقفل
+  HIDDEN // مخفي
+}
+
+enum OperationType {
+  BOOKING_SYSTEM // نظام الحجوزات
+  PAYMENT_SYSTEM // نظام الدفع
+  ROOM_MANAGEMENT // إدارة الغرف
+  STAFF_MANAGEMENT // إدارة الموظفين
+  FINANCIAL_SYSTEM // النظام المالي
+  REPORTING_SYSTEM // نظام التقارير
+  INVENTORY_SYSTEM // نظام المخزون
+  MAINTENANCE_SYSTEM // نظام الصيانة
+  SECURITY_SYSTEM // نظام الأمان
+  GUEST_SERVICES // خدمات الضيوف
+  MARKETING_SYSTEM // نظام التسويق
+  LOYALTY_PROGRAM // برنامج الولاء
+}
+
+enum ControlAction {
+  LOCK // قفل
+  UNLOCK // فتح
+  HIDE // إخفاء
+  SHOW // إظهار
+  SUSPEND // تعليق
+  ACTIVATE // تفعيل
+  MAINTENANCE_MODE // وضع الصيانة
+  EMERGENCY_MODE // وضع الطوارئ
+}
+
+enum LockLevel {
+  SOFT_LOCK // قفل ناعم (إشعار فقط)
+  HARD_LOCK // قفل صلب (منع كامل)
+  DEPARTMENTS // قفل أقسام محددة
+  ROLES // قفل أدوار محددة
+  GLOBAL // قفل شامل
+}
+
+// نظام إدارة العمليات الرئيسية
+model OperationalModule {
+  id            String            @id @default(cuid())
+  hotelId       String? // null = global, specific hotel ID
+  moduleName    String // Booking, Payment, Reports, etc.
+  operationType OperationType
+  status        OperationalStatus @default(ACTIVE)
+
+  // معلومات التحكم
+  controlLevel LockLevel      @default(SOFT_LOCK)
+  lockedBy     String? // Admin user ID
+  lockedAt     DateTime?
+  unlockAt     DateTime? // إلغاء القفل التلقائي
+  lastAction   ControlAction?
+
+  // الرسائل والإشعارات
+  lockMessage        String? // رسالة عند القفل
+  maintenanceMessage String? // رسالة الصيانة
+  emergencyMessage   String? // رسالة الطوارئ
+
+  // الصلاحيات
+  adminOnly       Boolean    @default(false) // إداري فقط
+  requiredRole    UserRole? // دور مطلوب للعمل
+  restrictedRoles UserRole[] // الأدوار المحظورة
+  allowedRoles    UserRole[] @default([]) // الأدوار المسموحة
+
+  // إعدادات متقدمة
+  allowOverride Boolean @default(false) // السماح بتجاوز القفل
+  logActions    Boolean @default(true) // تسجيل الإجراءات
+
+  // البيانات
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // العلاقات
+  operationLogs       OperationLog[]
+  scheduledOperations ScheduledOperation[]
+
+  @@unique([hotelId, moduleName])
+  @@index([status])
+  @@index([operationType])
+  @@index([lockedBy])
+}
+
+// سجل جميع إجراءات التحكم
+model OperationLog {
+  id       String            @id @default(cuid())
+  moduleId String
+  module   OperationalModule @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+
+  action      ControlAction
+  performedBy String // Admin user ID
+  performedByUser User @relation(fields: [performedBy], references: [id], onDelete: Cascade)
+  reason      String? // سبب الإجراء
+  targetId    String? // ID العنصر المستهدف
+
+  // معلومات إضافية
+  previousStatus OperationalStatus?
+  newStatus      OperationalStatus?
+  message        String? // رسالة إضافية
+
+  // البيانات التقنية
+  ipAddress String?
+  userAgent String?
+  metadata  Json? // بيانات إضافية
+
+  createdAt DateTime @default(now())
+
+  @@index([moduleId])
+  @@index([performedBy])
+  @@index([createdAt])
+  @@index([action])
+}
+
+// نظام إدارة الجدولة
+model ScheduledOperation {
+  id       String            @id @default(cuid())
+  moduleId String
+  module   OperationalModule @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+
+  operationName String
+  action        ControlAction
+  scheduledAt   DateTime // موعد التنفيذ
+
+  // الشروط
+  condition  String? // شرط التنفيذ
+  repeatType String? // دورية: daily, weekly, monthly
+
+  // الحالة
+  isActive   Boolean   @default(true)
+  executed   Boolean   @default(false)
+  executedAt DateTime?
+  executedBy String?
+
+  // البيانات
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([moduleId])
+  @@index([scheduledAt])
+  @@index([isActive])
+}
+
+// نظام إشعارات العمليات
+model OperationalAlert {
+  id      String  @id @default(cuid())
+  hotelId String? // null = global
+
+  alertType String // warning, error, info, success
+  title     String
+  message   String
+
+  // الأولوية
+  priority String @default("medium") // low, medium, high, critical
+
+  // الحالة
+  isRead   Boolean @default(false)
+  isActive Boolean @default(true)
+
+  // المواضعة
+  dismissedBy String?
+  dismissedAt DateTime?
+  expiresAt   DateTime?
+
+  // الهدف
+  targetRoles UserRole[] // الأدوار المستهدفة
+  targetUsers String[] // المستخدمين المستهدفين
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([hotelId])
+  @@index([isActive])
+  @@index([priority])
+  @@index([isRead])
+}
+
+// إدارة الوصول المتقدم
+model AdvancedAccessControl {
+  id      String  @id @default(cuid())
+  hotelId String? // null = global
+
+  // التحكم
+  resourceType String // module, api, page, button
+  resourceId   String // اسم المصدر
+  controlType  String // block, restrict, allow
+
+  // الشروط
+  conditions       Json // شروط التحكم
+  timeRestrictions Json? // قيود الوقت
+
+  // المستخدمون
+  allowedRoles UserRole[] // الأدوار المسموحة
+  allowedUsers String[] // المستخدمين المسموح لهم
+  blockedRoles UserRole[] // الأدوار المحظورة
+  blockedUsers String[] // المستخدمين المحظورين
+
+  // الحالة
+  isActive       Boolean @default(true)
+  createdBy      String // Admin user ID
+  lastModifiedBy String? // آخر مطور
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([hotelId, resourceType, resourceId])
+  @@index([resourceType])
+  @@index([isActive])
+}
+
+// نظام مراقبة الأداء
+model PerformanceMonitor {
+  id      String  @id @default(cuid())
+  hotelId String? // null = global
+
+  metricName String // response_time, error_rate, cpu_usage, etc.
+  moduleName String? // النظام المراقب
+
+  // البيانات
+  value     Float // قيمة المقياس
+  threshold Float? // الحد المراقب
+
+  // الحالة
+  status     String // normal, warning, critical
+  isAlerting Boolean @default(false)
+
+  // التوقيت
+  measuredAt DateTime @default(now())
+
+  createdAt DateTime @default(now())
+
+  @@index([hotelId])
+  @@index([metricName])
+  @@index([measuredAt])
+  @@index([status])
+}
+
+// إدارة النسخ الاحتياطي التلقائي
+model BackupConfiguration {
+  id      String  @id @default(cuid())
+  hotelId String? // null = global
+
+  backupName String
+  backupType String // full, incremental, selective
+
+  // التوقيت
+  schedule   String // cron expression
+  lastBackup DateTime?
+  nextBackup DateTime?
+
+  // الحالة
+  isEnabled Boolean @default(true)
+  isRunning Boolean @default(false)
+
+  // التفاصيل
+  retentionDays Int     @default(30)
+  compression   Boolean @default(true)
+  encryption    Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([hotelId])
+  @@index([isEnabled])
+  @@index([nextBackup])
+}
